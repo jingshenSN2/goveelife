@@ -18,6 +18,9 @@ from homeassistant.const import (
     CONF_DEVICES,
     STATE_UNKNOWN,
     CONF_STATE,
+    UnitOfTemperature,
+    PERCENTAGE,
+    CONCENTRATION_PARTS_PER_MILLION,
 )
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -38,9 +41,10 @@ from .utils import (
 
 _LOGGER: Final = logging.getLogger(__name__)
 platform='sensor'
-platform_device_types = [ 
-    'devices.types.sensor:.*', 
-    'devices.types.thermometer:.*' 
+platform_device_types = [
+    'devices.types.sensor:.*',
+    'devices.types.thermometer:.*',
+    'devices.types.air_quality_monitor:.*'
 ]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
@@ -89,16 +93,45 @@ class GoveeLifeSensor(GoveeLifePlatformEntity):
     def _init_platform_specific(self, **kwargs):
         """Platform specific init actions"""
         capabilities = kwargs.get('cap')
-        self._capability_name = capabilities.get('instance') 
+        self._capability_name = capabilities.get('instance')
         self.uniqueid = self._identifier + '_' + self._entity_id + '_' + self._capability_name
         self._name = self._capability_name
         self._state_class = SensorStateClass.MEASUREMENT
+
+        # Map capability instance to device class and unit of measurement
+        self._device_class = None
+        self._unit_of_measurement = None
+
+        # Temperature sensors
+        if self._capability_name in ['sensorTemperature', 'temperature']:
+            self._device_class = SensorDeviceClass.TEMPERATURE
+            self._unit_of_measurement = UnitOfTemperature.CELSIUS
+
+        # Humidity sensors
+        elif self._capability_name in ['sensorHumidity', 'humidity']:
+            self._device_class = SensorDeviceClass.HUMIDITY
+            self._unit_of_measurement = PERCENTAGE
+
+        # CO2 sensors
+        elif self._capability_name in ['carbonDioxideConcentration', 'co2']:
+            self._device_class = SensorDeviceClass.CO2
+            self._unit_of_measurement = CONCENTRATION_PARTS_PER_MILLION
 
     @property
     def state_class(self) -> SensorStateClass | None:
         """Return the state_class of the entity."""
         _LOGGER.debug("%s - %s: state_class: property requested", self._api_id, self._identifier)
         return self._state_class
+
+    @property
+    def device_class(self) -> SensorDeviceClass | None:
+        """Return the device_class of the entity."""
+        return self._device_class
+
+    @property
+    def unit_of_measurement(self) -> str | None:
+        """Return the unit_of_measurement of the entity."""
+        return self._unit_of_measurement
 
     @property
     def capability_attributes(self):
